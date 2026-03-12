@@ -1,146 +1,217 @@
 var express = require('express');
 var router = express.Router();
+let userModel = require('../schemas/users')
 
-const User = require('../schemas/users');
-const Role = require('../schemas/roles');
-
-// ===== USER ENDPOINTS =====
-
-// Create User
-router.post('/users', async (req, res) => {
-  try {
-    const user = new User(req.body);
-    await user.save();
-    res.status(201).json(user);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
+// GET all users
+router.get('/', async function (req, res, next) {
+    try {
+        let data = await userModel.find({
+            isDeleted: false
+        }).populate({
+            path: 'role',
+            select: 'name description'
+        });
+        res.send(data);
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
-// Get all Users (non-deleted)
-router.get('/users', async (req, res) => {
-  try {
-    const users = await User.find({ isDeleted: false }).populate('role');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// GET user by id
+router.get('/:id', async function (req, res, next) {
+    try {
+        let id = req.params.id;
+        let result = await userModel.findById(id).populate({
+            path: 'role',
+            select: 'name description'
+        });
+        if (result && !result.isDeleted) {
+            res.send(result);
+        } else {
+            res.status(404).send({
+                message: "ID NOT FOUND"
+            })
+        }
+    } catch (error) {
+        res.status(404).send({
+            message: error.message
+        })
+    }
 });
 
-// Get User by ID
-router.get('/users/:id', async (req, res) => {
-  try {
-    const user = await User.findOne({ _id: req.params.id, isDeleted: false }).populate('role');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// POST create user
+router.post('/', async function (req, res, next) {
+    try {
+        let { username, password, email, fullName, avatarUrl, role } = req.body;
+        
+        if (!username || !password || !email) {
+            return res.status(400).send({
+                message: "username, password, and email are required"
+            })
+        }
+
+        let newUser = new userModel({
+            username,
+            password,
+            email,
+            fullName: fullName || "",
+            avatarUrl: avatarUrl || "https://i.sstatic.net/l60Hf.png",
+            role: role || null,
+            status: false,
+            loginCount: 0
+        });
+
+        let result = await newUser.save();
+        let populatedResult = await result.populate({
+            path: 'role',
+            select: 'name description'
+        });
+        
+        res.status(201).send({
+            message: "User created successfully",
+            data: populatedResult
+        });
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
-// Soft Delete User
-router.put('/users/:id', async (req, res) => {
-  try {
-    const user = await User.findOneAndUpdate(
-      { _id: req.params.id, isDeleted: false },
-      { isDeleted: true },
-      { new: true }
-    );
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ message: 'User deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// PUT update user
+router.put('/:id', async function (req, res, next) {
+    try {
+        let id = req.params.id;
+        let { username, password, email, fullName, avatarUrl, role, loginCount } = req.body;
+
+        let updateData = {};
+        if (username) updateData.username = username;
+        if (password) updateData.password = password;
+        if (email) updateData.email = email;
+        if (fullName !== undefined) updateData.fullName = fullName;
+        if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+        if (role !== undefined) updateData.role = role;
+        if (loginCount !== undefined) updateData.loginCount = loginCount;
+
+        let result = await userModel.findByIdAndUpdate(id, updateData, { new: true }).populate({
+            path: 'role',
+            select: 'name description'
+        });
+        
+        if (result && !result.isDeleted) {
+            res.send({
+                message: "User updated successfully",
+                data: result
+            });
+        } else {
+            res.status(404).send({
+                message: "ID NOT FOUND"
+            })
+        }
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
-// Enable User
-router.post('/users/enable', async (req, res) => {
-  try {
-    const { email, username } = req.body;
-    const user = await User.findOne({ email, username, isDeleted: false });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    user.status = true;
-    await user.save();
-    res.json({ message: 'User enabled successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// DELETE user (soft delete)
+router.delete('/:id', async function (req, res, next) {
+    try {
+        let id = req.params.id;
+        let result = await userModel.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+        
+        if (result) {
+            res.send({
+                message: "User deleted successfully",
+                data: result
+            });
+        } else {
+            res.status(404).send({
+                message: "ID NOT FOUND"
+            })
+        }
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
-// Disable User
-router.post('/users/disable', async (req, res) => {
-  try {
-    const { email, username } = req.body;
-    const user = await User.findOne({ email, username, isDeleted: false });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    user.status = false;
-    await user.save();
-    res.json({ message: 'User disabled successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+// POST enable user (set status to true)
+router.post('/enable', async function (req, res, next) {
+    try {
+        let { email, username } = req.body;
+        
+        if (!email || !username) {
+            return res.status(400).send({
+                message: "email and username are required"
+            })
+        }
+
+        let result = await userModel.findOneAndUpdate(
+            { email, username, isDeleted: false },
+            { status: true },
+            { new: true }
+        ).populate({
+            path: 'role',
+            select: 'name description'
+        });
+
+        if (result) {
+            res.send({
+                message: "User enabled successfully",
+                data: result
+            });
+        } else {
+            res.status(404).send({
+                message: "User not found with the provided email and username"
+            })
+        }
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
-// ===== ROLE ENDPOINTS =====
+// POST disable user (set status to false)
+router.post('/disable', async function (req, res, next) {
+    try {
+        let { email, username } = req.body;
+        
+        if (!email || !username) {
+            return res.status(400).send({
+                message: "email and username are required"
+            })
+        }
 
-// Create Role
-router.post('/roles', async (req, res) => {
-  try {
-    const role = new Role(req.body);
-    await role.save();
-    res.status(201).json(role);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-});
+        let result = await userModel.findOneAndUpdate(
+            { email, username, isDeleted: false },
+            { status: false },
+            { new: true }
+        ).populate({
+            path: 'role',
+            select: 'name description'
+        });
 
-// Get all Roles (non-deleted)
-router.get('/roles', async (req, res) => {
-  try {
-    const roles = await Role.find({ isDeleted: false });
-    res.json(roles);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get Role by ID
-router.get('/roles/:id', async (req, res) => {
-  try {
-    const role = await Role.findOne({ _id: req.params.id, isDeleted: false });
-    if (!role) return res.status(404).json({ message: 'Role not found' });
-    res.json(role);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Soft Delete Role
-router.put('/roles/:id', async (req, res) => {
-  try {
-    const role = await Role.findOneAndUpdate(
-      { _id: req.params.id, isDeleted: false },
-      { isDeleted: true },
-      { new: true }
-    );
-    if (!role) return res.status(404).json({ message: 'Role not found' });
-    res.json({ message: 'Role deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get Users by Role ID
-router.get('/roles/:id/users', async (req, res) => {
-  try {
-    const users = await User.find({ 
-      role: req.params.id, 
-      isDeleted: false 
-    }).populate('role');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+        if (result) {
+            res.send({
+                message: "User disabled successfully",
+                data: result
+            });
+        } else {
+            res.status(404).send({
+                message: "User not found with the provided email and username"
+            })
+        }
+    } catch (error) {
+        res.status(500).send({
+            message: error.message
+        })
+    }
 });
 
 module.exports = router;

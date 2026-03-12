@@ -29,8 +29,7 @@ let userSchema = mongoose.Schema({
     },
     role: {
         type: mongoose.Types.ObjectId,
-        ref: 'role',
-        required: true
+        ref: 'role'
     },
     loginCount: {
         type: Number,
@@ -40,9 +39,11 @@ let userSchema = mongoose.Schema({
     isDeleted: {
         type: Boolean,
         default: false
+    },
+    timestamp: {
+        type: Date,
+        default: Date.now
     }
-}, {
-    timestamps: true
-});
+})
 
-module.exports = mongoose.model('user', userSchema);
+module.exports = mongoose.model('user', userSchema)

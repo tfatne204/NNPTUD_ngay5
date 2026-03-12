@@ -7,6 +7,7 @@ let mongoose = require('mongoose')
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var rolesRouter = require('./routes/roles');
 
 var app = express();
 
@@ -21,16 +22,21 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
-app.use('/users', usersRouter);
+app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/roles', rolesRouter);
 app.use('/api/v1/products', require('./routes/products'))
 app.use('/api/v1/categories', require('./routes/categories'))
 
-mongoose.connect('mongodb://localhost:27017/NNPTUD-C5');
+mongoose.connect('mongodb+srv://ttp1321102004_db_user:xN8ubiRe5uESbNtW@cluster0.9ydcldo.mongodb.net/?appName=Cluster0&retryWrites=false').catch(err => console.error('MongoDB connection error:', err));
+
 mongoose.connection.on('connected', function () {
-  console.log("connected");
+  console.log("✓ MongoDB connected successfully");
 })
 mongoose.connection.on('disconnecting', function () {
-  console.log("disconnected");
+  console.log("⚠ MongoDB disconnected");
+})
+mongoose.connection.on('error', function (err) {
+  console.error('MongoDB connection error:', err);
 })
 
 // catch 404 and forward to error handler
